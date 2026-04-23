@@ -1,0 +1,59 @@
+-- SERVICES
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+
+-- SETTINGS
+local DesyncEnabled = false
+local UI_COLOR_MAIN = Color3.fromRGB(15, 15, 15) -- Deep Black
+local UI_COLOR_ACCENT = Color3.fromRGB(255, 255, 255) -- Sharp White
+
+-- 1. UI CREATION (ScreenGui -> Frame -> Button)
+local ScreenGui = Instance.new("ScreenGui", Players.LocalPlayer:WaitForChild("PlayerGui"))
+ScreenGui.Name = "MinimalDesyncUI"
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 150, 0, 50)
+MainFrame.Position = UDim2.new(0.5, -75, 0.1, 0)
+MainFrame.BackgroundColor3 = UI_COLOR_MAIN
+MainFrame.BorderSizePixel = 0
+
+local Corner = Instance.new("UICorner", MainFrame)
+Corner.CornerRadius = UDim.new(0, 8)
+
+local ToggleBtn = Instance.new("TextButton", MainFrame)
+ToggleBtn.Size = UDim2.new(1, -10, 1, -10)
+ToggleBtn.Position = UDim2.new(0, 5, 0, 5)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+ToggleBtn.Text = "DESYNC: OFF"
+ToggleBtn.TextColor3 = UI_COLOR_ACCENT
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 14
+
+local BtnCorner = Instance.new("UICorner", ToggleBtn)
+BtnCorner.CornerRadius = UDim.new(0, 6)
+
+-- 2. TOGGLE FUNCTION & ANIMATION
+ToggleBtn.MouseButton1Click:Connect(function()
+    DesyncEnabled = not DesyncEnabled
+    
+    -- Visual Update
+    if DesyncEnabled then
+        ToggleBtn.Text = "DESYNC: ON"
+        TweenService:Create(ToggleBtn, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(255, 255, 255), TextColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+    else
+        ToggleBtn.Text = "DESYNC: OFF"
+        TweenService:Create(ToggleBtn, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(30, 30, 30), TextColor3 = UI_COLOR_ACCENT}):Play()
+    end
+end)
+
+-- 3. THE DESYNC LOGIC (The "WorldStepMax" Method)
+RunService.Heartbeat:Connect(function()
+    if DesyncEnabled then
+        -- This breaks the client-to-server physics sync
+        setfflag("WorldStepMax", "-9999999999999")
+    else
+        -- Resets to default
+        setfflag("WorldStepMax", "-1")
+    end
+end)
