@@ -14,6 +14,11 @@ local RATE_ON = "1"
 local RATE_OFF = "30"
 local toggled = false
 
+local hasFileControl = type(isfile) == "function" and type(readfile) == "function"
+local hasHttpControl = (type(syn) == "table" and type(syn.request) == "function") or type(http_request) == "function" or type(request) == "function"
+local externalCommandFile = "roblox_desync_command.txt"
+local externalCommandUrl = "http://127.0.0.1:8000/roblox_desync"
+
 local function setFFlag(name, value)
     if typeof(name) ~= "string" or typeof(value) ~= "string" then
         return false
@@ -34,29 +39,103 @@ local function setFFlag(name, value)
     return false
 end
 
-local function updateStatusLabel(isOn, success)
+local function updateStatusLabel(isOn, success, source)
     if success then
-        statusLabel.Text = "Desync: " .. (isOn and "ON" or "OFF")
+        statusLabel.Text = "Desync: " .. (isOn and "ON" or "OFF") .. " [" .. source .. "]"
         statusLabel.TextColor3 = isOn and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 255, 255)
     else
-        statusLabel.Text = "Desync: FAILED"
+        statusLabel.Text = "Desync: FAILED [" .. source .. "]"
         statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
     end
 end
 
-local function toggleDesync()
-    toggled = not toggled
-
-    local targetRate = toggled and RATE_ON or RATE_OFF
+local function applyDesyncState(desiredOn, source)
+    local targetRate = desiredOn and RATE_ON or RATE_OFF
     local success = setFFlag(FLAG_NAME, targetRate)
 
     if success then
-        print("Desync:", toggled and "ON" or "OFF", "(rate=" .. targetRate .. ")")
+        toggled = desiredOn
+        print("Desync:", desiredOn and "ON" or "OFF", "(rate=" .. targetRate .. ")", "source=" .. source)
     else
         print("Desync toggle failed. Check executor compatibility.")
     end
 
-    updateStatusLabel(toggled, success)
+    updateStatusLabel(desiredOn, success, source)
+    return success
+end
+
+local function toggleDesync()
+    return applyDesyncState(not toggled, "manual")
+end
+
+local function parseExternalCommand(text)
+    if type(text) ~= "string" then
+        return nil
+    end
+
+    local command = text:match("%S+")
+    if not command then
+        return nil
+    end
+
+    command = command:upper()
+    if command == "ON" or command == "OFF" or command == "TOGGLE" then
+        return command
+    end
+
+    return nil
+end
+
+local function readExternalFileCommand()
+    if not hasFileControl then
+        return nil
+    end
+
+    local ok, text = pcall(readfile, externalCommandFile)
+    if not ok or type(text) ~= "string" then
+        return nil
+    end
+
+    return parseExternalCommand(text)
+end
+
+local function fetchHttpCommand()
+    local requestFunc = nil
+    if type(syn) == "table" and type(syn.request) == "function" then
+        requestFunc = syn.request
+    elseif type(http_request) == "function" then
+        requestFunc = http_request
+    elseif type(request) == "function" then
+        requestFunc = request
+    end
+
+    if not requestFunc then
+        return nil
+    end
+
+    local ok, response = pcall(requestFunc, {Url = externalCommandUrl, Method = "GET"})
+    if not ok or type(response) ~= "table" or type(response.Body) ~= "string" then
+        return nil
+    end
+
+    return parseExternalCommand(response.Body)
+end
+
+local function externalControlLoop()
+    while task.wait(1) do
+        local command = readExternalFileCommand()
+        if not command then
+            command = fetchHttpCommand()
+        end
+
+        if command == "TOGGLE" then
+            toggleDesync()
+        elseif command == "ON" then
+            applyDesyncState(true, "external")
+        elseif command == "OFF" then
+            applyDesyncState(false, "external")
+        end
+    end
 end
 
 local screenGui = Instance.new("ScreenGui")
@@ -82,7 +161,7 @@ statusLabel.Name = "DesyncStatusLabel"
 statusLabel.Size = UDim2.new(0, 220, 0, 30)
 statusLabel.Position = UDim2.new(0.5, -110, 0.42, -15)
 statusLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-statusLabel.Text = "Desync: OFF"
+statusLabel.Text = "Desync: OFF [manual]"
 statusLabel.Font = Enum.Font.SourceSans
 statusLabel.TextSize = 18
 statusLabel.TextColor3 = Color3.new(1, 1, 1)
@@ -91,3 +170,13 @@ statusLabel.BorderSizePixel = 0
 statusLabel.Parent = screenGui
 
 button.MouseButton1Click:Connect(toggleDesync)
+
+task.spawn(externalControlLoop)
+
+if hasFileControl then
+    print("External control: file mode enabled. Use " .. externalCommandFile .. " with ON/OFF/TOGGLE.")
+elseif hasHttpControl then
+    print("External control: HTTP mode enabled. Polling " .. externalCommandUrl .. ".")
+else
+    print("External control disabled: no supported executor file or HTTP APIs found.")
+end
