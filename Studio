@@ -1,0 +1,28 @@
+local toggled = false -- Starts as OFF
+
+-- This function runs every time they click the button
+function toggleDesync()
+    toggled = not toggled -- Flips true to false, or false to true
+    
+    if toggled then
+        -- The "ON" values (lowers data rate to cause desync)
+        setfflag("DFIntS2PhysicsSenderRate", "1")
+        print("Desync: ON")
+    else
+        -- The "OFF" values (Roblox default is usually 20-30)
+        setfflag("DFIntS2PhysicsSenderRate", "30") 
+        print("Desync: OFF")
+    end
+end
+-- Simple UI Button Code
+local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+local Button = Instance.new("TextButton", ScreenGui)
+
+Button.Size = UDim2.new(0, 200, 0, 50)
+Button.Text = "Toggle Desync"
+Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+
+-- Connect the button to the logic above
+Button.MouseButton1Click:Connect(function()
+    toggleDesync()
+end)
