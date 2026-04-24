@@ -1,28 +1,93 @@
-local toggled = false -- Starts as OFF
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
 
--- This function runs every time they click the button
-function toggleDesync()
-    toggled = not toggled -- Flips true to false, or false to true
-    
-    if toggled then
-        -- The "ON" values (lowers data rate to cause desync)
-        setfflag("DFIntS2PhysicsSenderRate", "1")
-        print("Desync: ON")
+local localPlayer = Players.LocalPlayer
+if not localPlayer then
+    warn("LocalPlayer not found. Run this script as a LocalScript in Play mode.")
+    return
+end
+
+local playerGui = localPlayer:WaitForChild("PlayerGui")
+
+local FLAG_NAME = "DFIntS2PhysicsSenderRate"
+local RATE_ON = "1"
+local RATE_OFF = "30"
+local toggled = false
+
+local function setFFlag(name, value)
+    if typeof(name) ~= "string" or typeof(value) ~= "string" then
+        return false
+    end
+
+    if setfflag then
+        setfflag(name, value)
+        return true
+    elseif syn and syn.set_fflag then
+        syn.set_fflag(name, value)
+        return true
+    elseif KRNL and KRNL.SetFFlag then
+        KRNL.SetFFlag(name, value)
+        return true
+    end
+
+    warn("FFlag function not found. This script requires an executor that supports setfflag or syn.set_fflag.")
+    return false
+end
+
+local function updateStatusLabel(isOn, success)
+    if success then
+        statusLabel.Text = "Desync: " .. (isOn and "ON" or "OFF")
+        statusLabel.TextColor3 = isOn and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 255, 255)
     else
-        -- The "OFF" values (Roblox default is usually 20-30)
-        setfflag("DFIntS2PhysicsSenderRate", "30") 
-        print("Desync: OFF")
+        statusLabel.Text = "Desync: FAILED"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
     end
 end
--- Simple UI Button Code
-local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
-local Button = Instance.new("TextButton", ScreenGui)
 
-Button.Size = UDim2.new(0, 200, 0, 50)
-Button.Text = "Toggle Desync"
-Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+local function toggleDesync()
+    toggled = not toggled
 
--- Connect the button to the logic above
-Button.MouseButton1Click:Connect(function()
-    toggleDesync()
-end)
+    local targetRate = toggled and RATE_ON or RATE_OFF
+    local success = setFFlag(FLAG_NAME, targetRate)
+
+    if success then
+        print("Desync:", toggled and "ON" or "OFF", "(rate=" .. targetRate .. ")")
+    else
+        print("Desync toggle failed. Check executor compatibility.")
+    end
+
+    updateStatusLabel(toggled, success)
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DesyncToggleGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui or StarterGui
+
+local button = Instance.new("TextButton")
+button.Name = "ToggleDesyncButton"
+button.Size = UDim2.new(0, 220, 0, 60)
+button.Position = UDim2.new(0.5, -110, 0.55, -30)
+button.AnchorPoint = Vector2.new(0.5, 0.5)
+button.Text = "Toggle Desync"
+button.Font = Enum.Font.SourceSansBold
+button.TextSize = 20
+button.TextColor3 = Color3.new(1, 1, 1)
+button.BackgroundColor3 = Color3.fromRGB(48, 48, 48)
+button.BorderSizePixel = 0
+button.Parent = screenGui
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "DesyncStatusLabel"
+statusLabel.Size = UDim2.new(0, 220, 0, 30)
+statusLabel.Position = UDim2.new(0.5, -110, 0.42, -15)
+statusLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+statusLabel.Text = "Desync: OFF"
+statusLabel.Font = Enum.Font.SourceSans
+statusLabel.TextSize = 18
+statusLabel.TextColor3 = Color3.new(1, 1, 1)
+statusLabel.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+statusLabel.BorderSizePixel = 0
+statusLabel.Parent = screenGui
+
+button.MouseButton1Click:Connect(toggleDesync)
